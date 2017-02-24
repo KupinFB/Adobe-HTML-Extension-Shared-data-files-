@@ -1,0 +1,189 @@
+<!doctype html>
+
+<html>
+
+    <head>
+        <meta charset="utf-8">
+
+        <title>Shared data (files) example</title>
+
+        <!-- CSS -->
+        <link id="hostStyle" rel="stylesheet" type="text/css" href="css/style.css">
+
+        <!-- EXTERNAL LIBS -->
+        <script src="libs/Jquery/jquery-3.1.1.min.js"></script>
+        <script src="libs/CEP/7.0/CSInterface.js"></script>
+        <script src="libs/debugHelper.js"></script>
+        <script src="libs/themeManager.js"></script>
+        <script src="libs/local-shared-data.js"></script>
+        <script src="libs/Utils.js"></script>
+        
+
+        <script type="text/javascript">
+            
+			// init a theme manager
+			themeManager.init();
+			
+			var maxCountOfColors = 20;
+			
+			// init a SharedData file
+			var clorsDataDB = new LocalSharedData(	(new CSInterface()).getSystemPath(SystemPath.EXTENSION) + "/colors.data", // path to DBfile
+													"",  	// encryption key
+													false); // allow encription (if TRUE - it works very slowly)
+			
+			// Default values for DB (if it is a first start)
+			var defaultData = {
+				selected:"002",
+				colors:[
+					{guid:"001", color:"#55AAFF"},
+					{guid:"002", color:"#FF55AA"},
+					{guid:"003", color:"#55AAFF"},
+					{guid:"004", color:"#AAFF55"},
+					{guid:"005", color:"#FFAA55"},
+					{guid:"006", color:"#55AAFF"},
+					{guid:"007", color:"#AA55FF"},
+					{guid:"008", color:"#55AA00"},
+					{guid:"009", color:"#5500FF"},
+					{guid:"010", color:"#550000"},
+					{guid:"011", color:"#0000FF"}
+				]
+			};
+			
+			// Listener from other extensions (DataWasChanged)
+			(new CSInterface()).addEventListener("com.test.event.dataWasChanged", onDataChangingEvent);
+			
+			var data = {};
+			
+			$( document ).ready(function(){
+				validateColorsView();
+			});
+			
+			function validateColorsView() {
+			
+				// set data
+				data = clorsDataDB.get("ourDataKey");
+				if(!data)
+					data = defaultData;
+				
+				removeAllColors();
+				for(var i=0; i<data.colors.length; i++){
+					addColorToTheStage(data.colors[i]);
+				}
+			}
+			
+			function addColorToTheStage(colorItem){
+				var classes = "color";
+				if(colorItem.guid==data.selected)
+					classes += " selected";
+				var thmlItem = $('<div class="'+classes+'" style="background-color:'+colorItem.color+'"></div>')
+				thmlItem.bind( "click", onColorClickHandler);
+				$(".colors-container").append(thmlItem);
+				validateCountLabel();
+			}
+			
+			function onColorClickHandler(){
+				var target = $(event.currentTarget);
+				data.selected = data.colors[target.index()].guid;
+				var parContainer = $(".colors-container");
+				$(".colors-container").children(".selected").each(function () {
+					$(this).removeClass("selected");
+				});
+				target.addClass("selected");
+				saveData();
+			}
+			
+			function onAddClickHandler(){
+				if(data.colors.length >= maxCountOfColors)
+					return;
+				var newColor = {};
+				newColor.guid = Utils.generateGUID();
+				newColor.color = Utils.generateHEXColor();
+				data.colors.push(newColor);
+				addColorToTheStage(newColor);
+				saveData();
+			}
+			
+			function onRemoveClickHandler(){
+				for(var i=0; i<data.colors.length; i++){
+					if(data.colors[i] && data.colors[i].guid == data.selected){
+						var cColor = data.colors[i];
+						data.colors.splice(i, 1);
+						$(".colors-container").children().eq(i).detach();
+						var newSelectedIndex = i>=data.colors.length?(data.colors.length-1):i;
+						if(data.colors[newSelectedIndex]){
+							data.selected = data.colors[newSelectedIndex].guid;
+							$(".colors-container").children().eq(newSelectedIndex).addClass("selected");
+						}
+							
+						//validateColorsView();
+						saveData();
+						return;
+					}
+				}
+				
+			}			
+			
+			function removeAllColors(){
+				$(".colors-container").children().each(function () {
+					var item = $(this);
+					item.unbind( "click", onColorClickHandler);
+					item.remove();
+				});
+			}
+			
+			function onRefreshClickHandler(){
+				validateColorsView();
+			}
+			
+			function onCheckBoxChange(event){
+				if(event.currentTarget.checked)
+					dispatchChangingEvent();
+			}
+			
+			function saveData(){
+				clorsDataDB.add("ourDataKey", data);
+				if(document.getElementById('sendEventCB').checked)
+					dispatchChangingEvent();
+			}
+			
+			function dispatchChangingEvent(){
+				(new CSInterface).dispatchEvent( new CSEvent("com.test.event.dataWasChanged", "APPLICATION") );
+			}
+			
+			function onDataChangingEvent(){
+				validateColorsView();
+			}
+			
+			function validateCountLabel(){
+				document.getElementById('countLabel').innerHTML = data.colors.length + " / " + maxCountOfColors;
+			}
+			
+			
+        </script>
+
+    </head>
+    <body>
+        
+		<div>
+			<input id="sendEventCB" type="checkbox" onchange="onCheckBoxChange(event)" checked> - send event on changing</input>
+		</div>
+		<div class="title">
+			Colors:
+		</div>
+		<div id="countLabel">
+			.../...
+		</div>
+        <div class="container hostBorder colors-container">
+			
+		</div>
+		<div>
+			<button id="addBtn" onclick="onAddClickHandler()">Add</button>
+			<button onclick="onRemoveClickHandler()">Remove</button>
+			<button onclick="onRefreshClickHandler()">Refresh</button>
+		</div>
+		
+		
+		
+		
+    </body>
+</html>
